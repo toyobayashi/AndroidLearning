@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">CGSSVersionChecker</string>
+    <string name="checking">Checking...</string>
+</resources>
