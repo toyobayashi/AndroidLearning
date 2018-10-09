@@ -1,4 +1,4 @@
-package com.toyobayashi.cgssversionchecker;
+package com.github.toyobayashi;
 
 import android.content.Context;
 import android.support.test.InstrumentationRegistry;
