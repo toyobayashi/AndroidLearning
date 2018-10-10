@@ -22,7 +22,7 @@ public class Msgpack {
     private Msgpack() {}
 
     public static byte[] encode(Object data) throws IOException, JSONException {
-        MessageBufferPacker packer = MessagePack.newDefaultBufferPacker();
+        MessageBufferPacker packer = new MessagePack.PackerConfig().withStr8FormatSupport(false).newBufferPacker();
         pack(packer, data);
         packer.close();
         return packer.toByteArray();

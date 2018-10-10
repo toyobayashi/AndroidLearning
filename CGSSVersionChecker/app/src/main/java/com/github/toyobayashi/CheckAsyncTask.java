@@ -1,87 +1,68 @@
 package com.github.toyobayashi;
 
 import android.os.AsyncTask;
-import android.widget.Button;
-import android.widget.TextView;
+import android.util.Base64;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.lang.ref.WeakReference;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.nio.charset.StandardCharsets;
 
-class CheckAsyncTask extends AsyncTask<Void, Void, String> {
+class CheckAsyncTask extends AsyncTask<Void, Void, Object[]> {
 
-    private WeakReference<TextView> txtResVer;
-    private WeakReference<Button> btnCheck;
-    CheckAsyncTask (TextView txtResVer, Button btnCheck) {
-        this.txtResVer = new WeakReference<>(txtResVer);
-        this.btnCheck = new WeakReference<>(btnCheck);
+    private CheckAsyncTaskCallback callback;
+    CheckAsyncTask (CheckAsyncTaskCallback callback) {
+        this.callback = callback;
     }
 
+    @FunctionalInterface
+    public interface CheckAsyncTaskCallback {
+        void call(Exception err, String resver);
+    }
 
     @Override
     protected void onPreExecute() {
         super.onPreExecute();
-        txtResVer.get().setText(R.string.checking);
-        btnCheck.get().setEnabled(false);
     }
 
     @Override
-    protected String doInBackground(Void... voids) {
-        HttpURLConnection connection = null;
-        BufferedReader reader = null;
-        String res = "";
+    protected Object[] doInBackground(Void... voids) {
+        // CGSSClient client = new CGSSClient("940464243:174481488:cf608be5-6d38-421a-8eb1-11a501132c0a", "10045510");
+
+        String account = new String(Base64.decode("Nzc1ODkxMjUwOjkxMDg0MTY3NTo2MDBhNWVmZC1jYWU1LTQxZmYtYTBjNy03ZGVkYTc1MWM1ZWQ=", Base64.DEFAULT), StandardCharsets.US_ASCII);
+        CGSSClient client = new CGSSClient(account);
         try {
-            URL url = new URL("https://starlight.kirara.ca/api/v1/info");
-            connection = (HttpURLConnection) url.openConnection();
-
-            connection.setRequestMethod("GET");
-            connection.setConnectTimeout(10000);
-            connection.setReadTimeout(10000);
-
-            InputStream stream = connection.getInputStream();
-
-            reader = new BufferedReader(new InputStreamReader(stream));
-            StringBuilder response = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                response.append(line);
+            JSONObject res = client.check();
+            JSONObject dataHeaders = res.getJSONObject("data_headers");
+            int resultCode = dataHeaders.getInt("result_code");
+            if (resultCode == 214) {
+                String resver =  dataHeaders.getString("required_res_ver");
+                return new Object[] { null, resver };
+            } else if (resultCode == 1) {
+                return new Object[] { null, client.getResVer() };
+            } else {
+                return new Object[] { new Exception(String.valueOf(resultCode)), null };
             }
-            res = response.toString();
-        } catch (IOException e) {
+        } catch (IOException | JSONException e) {
             e.printStackTrace();
-        } finally {
-            if (reader != null) {
-                try {
-                    reader.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            if (connection != null) {
-                connection.disconnect();
-            }
+            return new Object[] { e, null };
         }
-        return res;
     }
 
     @Override
-    protected void onPostExecute(String res) {
+    protected void onPostExecute(Object[] res) {
         super.onPostExecute(res);
-        String resver = "failed";
-        try {
-            JSONObject jsonObject = new JSONObject(res);
-            resver = jsonObject.getString("truth_version");
-        } catch (JSONException e) {
-            e.printStackTrace();
+        if (res[0] != null) {
+            if (res[0] instanceof IOException) {
+                callback.call((IOException) res[0], null);
+            } else if (res[0] instanceof JSONException) {
+                callback.call((JSONException) res[0], null);
+            } else {
+                callback.call((Exception) res[0], null);
+            }
+        } else {
+            callback.call(null, (String) res[1]);
         }
-        btnCheck.get().setEnabled(true);
-        txtResVer.get().setText(resver);
     }
 }
