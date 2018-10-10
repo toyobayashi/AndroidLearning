@@ -33,9 +33,12 @@ class DownloadAsyncTask extends AsyncTask<String, Integer, Object> {
         String dir = path.substring(0, path.lastIndexOf(File.separator));
         String filename = path.substring(path.lastIndexOf(File.separator) + 1);
 
+        boolean isDecompress = args[2].equals("true");
+
         File saveDir = new File(dir);
         if (!saveDir.exists()) saveDir.mkdirs();
         File file = new File(path);
+        long fileLength = file.length();
 
         try {
             URL url = new URL(args[0]);
@@ -44,10 +47,14 @@ class DownloadAsyncTask extends AsyncTask<String, Integer, Object> {
             connection.setRequestProperty("User-Agent", "Dalvik/2.1.0 (Linux; U; Android 7.0; Nexus 42 Build/XYZZ1Y)");
             connection.setRequestProperty("X-Unity-Version", "5.4.5p1");
             connection.setRequestProperty("Accept-Encoding", "gzip");
-            connection.setRequestProperty("'Connection'", "Keep-Alive");
+            connection.setRequestProperty("Range", fileLength + "-");
+            connection.setRequestProperty("Connection", "Keep-Alive");
             connection.setRequestMethod("GET");
 
             int contentLength = connection.getContentLength();
+            if (fileLength == contentLength) {
+                return null;
+            }
 
             InputStream inputStream = connection.getInputStream();
             byte[] buffer = new byte[8192];
@@ -56,15 +63,20 @@ class DownloadAsyncTask extends AsyncTask<String, Integer, Object> {
             // ByteArrayOutputStream bos = new ByteArrayOutputStream();
 
             FileOutputStream fos = new FileOutputStream(file);
-            fos.flush();
+            // fos.flush();
             while ((len = inputStream.read(buffer)) != -1) {
 
                 fos.write(buffer, 0, len);
                 current += len;
                 publishProgress(current, contentLength);
             }
+            inputStream.close();
             fos.close();
+            connection.disconnect();
 
+            if (isDecompress) {
+                return new Exception("todo");
+            }
 
         } catch (MalformedURLException e) {
             e.printStackTrace();
@@ -85,6 +97,10 @@ class DownloadAsyncTask extends AsyncTask<String, Integer, Object> {
     @Override
     protected void onPostExecute(Object res) {
         super.onPostExecute(res);
-        if (res != null) callback.call((Exception) res, 0, 0);
+        if (res instanceof Exception) {
+            callback.call((Exception) res, -1, -1);
+        } else {
+            callback.call(null, -2, -2);
+        }
     }
 }

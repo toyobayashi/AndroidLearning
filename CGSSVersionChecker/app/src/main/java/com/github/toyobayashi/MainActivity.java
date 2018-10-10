@@ -1,6 +1,5 @@
 package com.github.toyobayashi;
 
-import android.os.Environment;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.widget.Button;
@@ -46,17 +45,19 @@ public class MainActivity extends AppCompatActivity {
             div.setText("0 / 0");
             btnDl.setEnabled(false);
             downloadManifest(
-                "http://storage.game.starlight-stage.jp/dl/10045510/manifests/Android_AHigh_SHigh",
-                getExternalFilesDir("").getAbsolutePath() + File.separator + "manifest.lz4",
+                "10045510",
                 (err, current, total) -> {
                     if (err != null) {
                         btnDl.setEnabled(true);
                         Toast.makeText(MainActivity.this, err.toString(), Toast.LENGTH_SHORT).show();
+                    } else {
+                        if (current == -2 && total == -2) {
+                            btnDl.setEnabled(true);
+                            div.setText("success");
+                        } else {
+                            div.setText(current + " / " + total);
+                        }
                     }
-                    if (current == total) {
-                        btnDl.setEnabled(true);
-                    }
-                    div.setText(current + " / " + total);
                 }
             );
         });
@@ -66,7 +67,11 @@ public class MainActivity extends AppCompatActivity {
         new CheckAsyncTask(callback).execute();
     }
 
-    private static void downloadManifest(String url, String path, DownloadAsyncTask.DownloadAsyncTaskCallback callback) {
-        new DownloadAsyncTask(callback).execute(url, path);
+    private void downloadManifest(String resVer, DownloadAsyncTask.DownloadAsyncTaskCallback callback) {
+        new DownloadAsyncTask(callback).execute(
+            "http://storage.game.starlight-stage.jp/dl/" + resVer + "/manifests/Android_AHigh_SHigh",
+            getExternalFilesDir("").getAbsolutePath() + File.separator + "manifest_" + resVer + ".db.lz4",
+            "true"
+        );
     }
 }
