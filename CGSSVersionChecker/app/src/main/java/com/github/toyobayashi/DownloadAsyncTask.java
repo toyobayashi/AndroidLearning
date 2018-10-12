@@ -11,16 +11,23 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
-class DownloadAsyncTask extends AsyncTask<String, Integer, Object> {
+class DownloadAsyncTask extends AsyncTask<String, Long, Object[]> {
 
-    private DownloadAsyncTaskCallback callback;
-    DownloadAsyncTask (DownloadAsyncTaskCallback callback) {
-        this.callback = callback;
+    private ProgressCallback progressCallback;
+    private ResultCallback resultCallback;
+    DownloadAsyncTask (ProgressCallback progressCallback, ResultCallback resultCallback) {
+        this.progressCallback = progressCallback;
+        this.resultCallback = resultCallback;
     }
 
     @FunctionalInterface
-    public interface DownloadAsyncTaskCallback {
-        void call(Exception err, int current, int total);
+    public interface ProgressCallback {
+        void call(long current, long total);
+    }
+
+    @FunctionalInterface
+    public interface ResultCallback {
+        void call(Exception err, String path, long size);
     }
 
     @Override
@@ -29,7 +36,7 @@ class DownloadAsyncTask extends AsyncTask<String, Integer, Object> {
     }
 
     @Override
-    protected Object doInBackground(String... args) {
+    protected Object[] doInBackground(String... args) {
         String path = args[1];
         String dir = path.substring(0, path.lastIndexOf(File.separator));
         // String filename = path.substring(path.lastIndexOf(File.separator) + 1);
@@ -39,11 +46,12 @@ class DownloadAsyncTask extends AsyncTask<String, Integer, Object> {
         File saveDir = new File(dir);
         if (!saveDir.exists()) {
             if (!saveDir.mkdirs()) {
-                return new IOException("创建目录失败");
+                return new Object[] { new IOException("创建目录失败"), "", -1L };
             }
         }
         File file = new File(path);
         long fileLength = file.length();
+        long contentLength;
 
         try {
             URL url = new URL(args[0]);
@@ -58,7 +66,7 @@ class DownloadAsyncTask extends AsyncTask<String, Integer, Object> {
             }
             connection.setRequestMethod("GET");
 
-            int contentLength = connection.getContentLength();
+            contentLength = connection.getContentLength();
             byte[] buffer = new byte[8192];
             int len;
             if (fileLength != contentLength) {
@@ -74,7 +82,7 @@ class DownloadAsyncTask extends AsyncTask<String, Integer, Object> {
 
                     fos.write(buffer, 0, len);
                     current += len;
-                    publishProgress(current, contentLength);
+                    publishProgress(current + fileLength, contentLength + fileLength);
                 }
                 inputStream.close();
                 fos.close();
@@ -94,31 +102,37 @@ class DownloadAsyncTask extends AsyncTask<String, Integer, Object> {
                 byte[] decBuffer = lz4Decompressor.decompress(baos.toByteArray());
                 baos.close();
 
-                FileOutputStream decfos = new FileOutputStream(path.substring(0, path.lastIndexOf(".")));
+                String decompressedFilePath = path.substring(0, path.lastIndexOf("."));
+                FileOutputStream decfos = new FileOutputStream(decompressedFilePath);
                 decfos.write(decBuffer);
                 decfos.close();
+                if (!file.delete()) {
+                    throw new IOException("删除文件失败");
+                }
+                return new Object[] { null, decompressedFilePath, (long) decBuffer.length };
             }
+            return new Object[] { null, path, contentLength + fileLength };
 
         } catch (IOException e) {
             e.printStackTrace();
-            return e;
+            return new Object[] { e, "", -1L };
         }
-        return null;
     }
 
     @Override
-    protected void onProgressUpdate(Integer... values) {
+    protected void onProgressUpdate(Long... values) {
         super.onProgressUpdate(values);
-        callback.call(null, values[0], values[1]);
+        progressCallback.call(values[0], values[1]);
     }
 
     @Override
-    protected void onPostExecute(Object res) {
+    protected void onPostExecute(Object[] res) {
         super.onPostExecute(res);
-        if (res instanceof Exception) {
-            callback.call((Exception) res, -1, -1);
+
+        if (res[0] != null) {
+            resultCallback.call((Exception) res[0], (String) res[1], (long) res[2]);
         } else {
-            callback.call(null, -2, -2);
+            resultCallback.call(null, (String) res[1], (long) res[2]);
         }
     }
 
